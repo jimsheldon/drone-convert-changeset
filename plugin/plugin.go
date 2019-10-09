@@ -10,21 +10,26 @@ import (
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
+
+	//"github.com/google/go-github/github"
 )
 
 // New returns a new conversion plugin.
-func New() converter.Plugin {
-	return new(plugin)
+func New(token string) converter.Plugin {
+	return &plugin{
+		token: token,
+	}
 }
 
 type plugin struct {
+	token string
 }
 
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
 	// TODO this should be modified or removed. For
 	// demonstration purposes we show how you can ignore
 	// certain configuration files by file extension.
-	if strings.HasSuffix(req.Repo.Config, ".yml") {
+	if ! strings.HasSuffix(req.Repo.Config, ".yml") {
 		// a nil response instructs the Drone server to
 		// use the configuration file as-is, without
 		// modification.
@@ -37,7 +42,7 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	// TODO this should be modified or removed. For
 	// demonstration purposes we make a simple modification
 	// to the configuration file and add a newline.
-	config = config + "\nwoot"
+//	config = config + "\nwoot"
 
 	// returns the modified configuration file.
 	return &drone.Config{

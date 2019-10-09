@@ -20,6 +20,8 @@ type spec struct {
 	Bind   string `envconfig:"DRONE_BIND"`
 	Debug  bool   `envconfig:"DRONE_DEBUG"`
 	Secret string `envconfig:"DRONE_SECRET"`
+
+	Token  string `envconfig:"GITHUB_TOKEN"`
 }
 
 func main() {
@@ -35,12 +37,17 @@ func main() {
 	if spec.Secret == "" {
 		logrus.Fatalln("missing secret key")
 	}
+	if spec.Token == "" {
+		logrus.Fatalln("missing token")
+	}
 	if spec.Bind == "" {
 		spec.Bind = ":3000"
 	}
 
 	handler := converter.Handler(
-		plugin.New(),
+		plugin.New(
+			spec.Token,
+		),
 		spec.Secret,
 		logrus.StandardLogger(),
 	)
