@@ -6,33 +6,25 @@ package plugin
 
 import (
 	"context"
-	"errors"
+	"strings"
 
+	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
 )
 
 // New returns a new conversion plugin.
-func New(param1, param2 string) converter.Plugin {
-	return &plugin{
-		// TODO replace or remove these configuration
-		// parameters. They are for demo purposes only.
-		param1: param1,
-		param2: param2,
-	}
+func New() converter.Plugin {
+	return new(plugin)
 }
 
 type plugin struct {
-	// TODO replace or remove these configuration
-	// parameters. They are for demo purposes only.
-	param1 string
-	param2 string
 }
 
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
 	// TODO this should be modified or removed. For
 	// demonstration purposes we show how you can ignore
 	// certain configuration files by file extension.
-	if strings.HasSuffix(req.Repo.Config, ".xyz") {
+	if strings.HasSuffix(req.Repo.Config, ".yml") {
 		// a nil response instructs the Drone server to
 		// use the configuration file as-is, without
 		// modification.
@@ -45,7 +37,7 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	// TODO this should be modified or removed. For
 	// demonstration purposes we make a simple modification
 	// to the configuration file and add a newline.
-	config = config + "\n"
+	config = config + "\nwoot"
 
 	// returns the modified configuration file.
 	return &drone.Config{

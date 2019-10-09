@@ -20,11 +20,6 @@ type spec struct {
 	Bind   string `envconfig:"DRONE_BIND"`
 	Debug  bool   `envconfig:"DRONE_DEBUG"`
 	Secret string `envconfig:"DRONE_SECRET"`
-
-	// TODO replace or remove these configuration
-	// parameters. They are for demo purposes only.
-	Param1 string `envconfig:"DRONE_PARAM_1"`
-	Param2 string `envconfig:"DRONE_PARAM_2"`
 }
 
 func main() {
@@ -45,12 +40,7 @@ func main() {
 	}
 
 	handler := converter.Handler(
-		plugin.New(
-			// TODO replace or remove these configuration
-			// parameters. They are for demo purposes only.
-			spec.Param1,
-			spec.Param2,
-		),
+		plugin.New(),
 		spec.Secret,
 		logrus.StandardLogger(),
 	)
