@@ -5,90 +5,18 @@
 package plugin
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"strings"
 
-	bkyaml "github.com/buildkite/yaml"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
-
-	"github.com/drone/drone-yaml/yaml"
+	yaml "github.com/drone/drone-yaml/yaml"
+	goyaml "gopkg.in/yaml.v2"
 	//"github.com/google/go-github/github"
 	//"golang.org/x/oauth2"
 )
-
-type csConditions struct {
-	Changeset yaml.Condition `json:"changeset,omitempty"`
-}
-
-type csContainer struct {
-	When csConditions `json:"when,omitempty"`
-}
-
-type csPipeline struct {
-	Version string            `json:"version,omitempty"`
-	Kind    string            `json:"kind,omitempty"`
-	Type    string            `json:"type,omitempty"`
-	Name    string            `json:"name,omitempty"`
-	Steps   []*yaml.Container `json:"steps,omitempty"`
-	Trigger csConditions      `json:"trigger,omitempty"`
-}
-
-func csParse(r io.Reader) (*yaml.Manifest, error) {
-	resources, err := yaml.ParseRaw(r)
-	if err != nil {
-		return nil, err
-	}
-	manifest := new(yaml.Manifest)
-	for _, raw := range resources {
-		if raw == nil {
-			continue
-		}
-		resource, err := parseRaw(raw)
-		if err != nil {
-			return nil, err
-		}
-		if resource.GetKind() == "" {
-			return nil, errors.New("yaml: missing kind attribute")
-		}
-		manifest.Resources = append(
-			manifest.Resources,
-			resource,
-		)
-	}
-	return manifest, nil
-}
-
-func parseRaw(r *yaml.RawResource) (yaml.Resource, error) {
-	var obj yaml.Resource
-	switch r.Kind {
-	case "pipeline":
-		obj = new(csPipeline)
-	}
-	err := bkyaml.Unmarshal(r.Data, obj)
-	return obj, err
-}
-
-func csParseBytes(b []byte) (*yaml.Manifest, error) {
-	return csParse(
-		bytes.NewBuffer(b),
-	)
-}
-
-func csParseString(s string) (*yaml.Manifest, error) {
-	return csParseBytes(
-		[]byte(s),
-	)
-}
-
-func (p *csPipeline) GetVersion() string { return p.Version }
-
-func (p *csPipeline) GetKind() string { return p.Kind }
 
 // New returns a new conversion plugin.
 func New(token string) converter.Plugin {
@@ -99,6 +27,59 @@ func New(token string) converter.Plugin {
 
 type plugin struct {
 	token string
+}
+
+type conditions struct {
+	yaml.Conditions
+	Changeset yaml.Condition `json:"changeset,omitempty"`
+}
+
+type container struct {
+	Build       *yaml.Build                `json:"build,omitempty"`
+	Command     []string                   `json:"command,omitempty"`
+	Commands    []string                   `json:"commands,omitempty"`
+	Detach      bool                       `json:"detach,omitempty"`
+	DependsOn   []string                   `json:"depends_on,omitempty" yaml:"depends_on"`
+	Devices     []*yaml.VolumeDevice       `json:"devices,omitempty"`
+	DNS         []string                   `json:"dns,omitempty"`
+	DNSSearch   []string                   `json:"dns_search,omitempty" yaml:"dns_search"`
+	Entrypoint  []string                   `json:"entrypoint,omitempty"`
+	Environment map[string]*yaml.Variable  `json:"environment,omitempty"`
+	ExtraHosts  []string                   `json:"extra_hosts,omitempty" yaml:"extra_hosts"`
+	Failure     string                     `json:"failure,omitempty"`
+	Image       string                     `json:"image,omitempty"`
+	Network     string                     `json:"network_mode,omitempty" yaml:"network_mode"`
+	Name        string                     `json:"name,omitempty"`
+	Ports       []*yaml.Port               `json:"ports,omitempty"`
+	Privileged  bool                       `json:"privileged,omitempty"`
+	Pull        string                     `json:"pull,omitempty"`
+	Push        *yaml.Push                 `json:"push,omitempty"`
+	Resources   *yaml.Resources            `json:"resources,omitempty"`
+	Settings    map[string]*yaml.Parameter `json:"settings,omitempty"`
+	Shell       string                     `json:"shell,omitempty"`
+	User        string                     `json:"user,omitempty"`
+	Volumes     []*yaml.VolumeMount        `json:"volumes,omitempty"`
+	When        conditions                 `json:"when,omitempty"`
+	WorkingDir  string                     `json:"working_dir,omitempty" yaml:"working_dir"`
+}
+
+type pipeline struct {
+	Version string `json:"version,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Name    string `json:"name,omitempty"`
+
+	Clone       yaml.Clone        `json:"clone,omitempty"`
+	Concurrency yaml.Concurrency  `json:"concurrency,omitempty"`
+	DependsOn   []string          `json:"depends_on,omitempty" yaml:"depends_on" `
+	Node        map[string]string `json:"node,omitempty" yaml:"node"`
+	Platform    yaml.Platform     `json:"platform,omitempty"`
+	PullSecrets []string          `json:"image_pull_secrets,omitempty" yaml:"image_pull_secrets"`
+	Services    []*yaml.Container `json:"services,omitempty"`
+	Steps       []*container      `json:"steps,omitempty"`
+	Trigger     conditions        `json:"trigger,omitempty"`
+	Volumes     []*yaml.Volume    `json:"volumes,omitempty"`
+	Workspace   yaml.Workspace    `json:"workspace,omitempty"`
 }
 
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
@@ -112,21 +93,29 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 		return nil, nil
 	}
 
+	var pipeline pipeline
+
 	// get the configuration file from the request.
 	config := req.Config.Data
-	manifest, err := csParseString(config)
+
+	//var b StructB
+
+	err := goyaml.Unmarshal([]byte(config), &pipeline)
 	if err != nil {
-		return nil, err
+		log.Fatalf("cannot unmarshal data: %v", err)
 	}
-	//var pipeline *csPipeline
-	for _, resource := range manifest.Resources {
-		v, ok := resource.(*csPipeline)
-		if !ok {
-			log.Println("notok")
-			continue
-		}
-		fmt.Println(v.Kind)
+
+	resources, err := yaml.ParseRawString(config)
+	if err != nil {
+		return nil, nil
 	}
+	for _, raw := range resources {
+		fmt.Println(raw.Kind)
+	}
+	//fmt.Printf("%v", pipeline.Trigger.Changeset.Include)
+	//for _, step := range pipeline.Steps {
+	//	fmt.Println(step.Image)
+	//}
 
 	// TODO this should be modified or removed. For
 	// demonstration purposes we make a simple modification
