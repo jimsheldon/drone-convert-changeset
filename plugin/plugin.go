@@ -12,7 +12,7 @@ import (
 	bkyaml "github.com/buildkite/yaml"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
-	yaml "github.com/drone/drone-yaml/yaml"
+	"github.com/drone/drone-yaml/yaml"
 	//"github.com/google/go-github/github"
 	//"golang.org/x/oauth2"
 )
@@ -82,15 +82,16 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 			switch t := obj.(type) {
 			case *pipeline:
 				if len(t.Trigger.Changeset.Include) > 0 {
-					fmt.Println("I see trigger include")
+					for _, include := range t.Trigger.Changeset.Include {
+						fmt.Println("include is", include)
+					}
 				}
 				if len(t.Steps) > 0 {
-					fmt.Println("there are steps")
 					for _, step := range t.Steps {
 						if step == nil {
 							continue
 						}
-						fmt.Println(step.Name)
+						fmt.Println("step is", step.Name)
 					}
 				}
 			}
