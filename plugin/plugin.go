@@ -8,21 +8,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
-	droneyaml "github.com/drone/drone-yaml/yaml"
-	"github.com/drone/drone-yaml/yaml/pretty"
 
-	"github.com/buildkite/yaml"
+	"gopkg.in/yaml.v2"
 	//"github.com/google/go-github/github"
 	//"golang.org/x/oauth2"
-)
-
-const (
-	separator = "---"
-	newline   = "\n"
 )
 
 // New returns a new conversion plugin.
@@ -32,8 +26,63 @@ func New(token string) converter.Plugin {
 	}
 }
 
-type plugin struct {
-	token string
+type (
+	plugin struct {
+		token string
+	}
+
+	resource struct {
+		Kind    string
+		Type    string
+		Steps   []*step                `yaml:"steps,omitempty"`
+		Trigger conditions             `yaml:"trigger,omitempty"`
+		Attrs   map[string]interface{} `yaml:",inline"`
+	}
+
+	step struct {
+		Name  string
+		When  conditions
+		Attrs map[string]interface{} `yaml:",inline"`
+	}
+
+	conditions struct {
+		Paths condition              `json:"yaml,omitempty"`
+		Attrs map[string]interface{} `yaml:",inline"`
+	}
+
+	condition struct {
+		Include []string `yaml:"include,omitempty"`
+	}
+)
+
+func unmarshal(b []byte) ([]*resource, error) {
+	buf := bytes.NewBuffer(b)
+	res := []*resource{}
+	dec := yaml.NewDecoder(buf)
+	for {
+		out := new(resource)
+		err := dec.Decode(out)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, out)
+	}
+	return res, nil
+}
+
+func marshal(in []*resource) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	enc := yaml.NewEncoder(buf)
+	for _, res := range in {
+		err := enc.Encode(res)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
 }
 
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
@@ -50,56 +99,29 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	// get the configuration file from the request.
 	config := req.Config.Data
 
-	manifest, err := droneyaml.ParseRawString(config)
+	resources, err := unmarshal([]byte(config))
 	if err != nil {
+		fmt.Println("failed")
 		return nil, nil
 	}
-
-	newManifest := &droneyaml.Manifest{}
-
-	for _, n := range manifest {
-		var r droneyaml.Resource
-		switch n.Kind {
-		case "cron":
-			r = new(droneyaml.Cron)
-		case "secret":
-			r = new(droneyaml.Secret)
-		case "signature":
-			r = new(droneyaml.Signature)
-		case "registry":
-			r = new(droneyaml.Registry)
-		default:
-			r = new(droneyaml.Pipeline)
-			err := yaml.Unmarshal(n.Data, r)
-			if err != nil {
-				return nil, nil
-			}
-
-			switch t := r.(type) {
-			case *droneyaml.Pipeline:
-				if len(t.Trigger.Paths.Include) > 0 {
-					for _, include := range t.Trigger.Paths.Include {
-						fmt.Println("include is", include)
-					}
-					t.Trigger.Event.Exclude = []string{"*"}
-					if len(t.Steps) > 0 {
-						for _, step := range t.Steps {
-							if step == nil {
-								continue
-							}
-							fmt.Println("step is", step.Name)
+	for _, r := range resources {
+		switch r.Kind {
+		case "pipeline":
+			if len(r.Trigger.Paths.Include) > 0 {
+				for _, include := range r.Trigger.Paths.Include {
+					fmt.Println("include is", include)
+				}
+				if len(r.Steps) > 0 {
+					for _, step := range r.Steps {
+						if step == nil {
+							continue
 						}
+						fmt.Println("step name", step.Name)
 					}
 				}
 			}
 		}
-		newManifest.Resources = append(newManifest.Resources, r)
 	}
-
-	// TODO this should be modified or removed. For
-	// demonstration purposes we make a simple modification
-	// to the configuration file and add a newline.
-	//config = config + "\nwoot"
 
 	//newctx := context.Background()
 	//ts := oauth2.StaticTokenSource(
@@ -111,9 +133,9 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	//log.Println(repos)
 
 	// returns the modified configuration file.
-	buf := new(bytes.Buffer)
-	pretty.Print(buf, newManifest)
+	//buf := new(bytes.Buffer)
+	//pretty.Print(buf, newManifest)
 	return &drone.Config{
-		Data: buf.String(),
+		Data: config,
 	}, nil
 }
