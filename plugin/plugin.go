@@ -9,11 +9,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
 
+	filepath "github.com/bmatcuk/doublestar"
 	"gopkg.in/yaml.v2"
 	//"github.com/google/go-github/github"
 	//"golang.org/x/oauth2"
@@ -84,40 +84,59 @@ func marshal(in []*resource) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
-	// TODO this should be modified or removed. For
-	// demonstration purposes we show how you can ignore
-	// certain configuration files by file extension.
-	if !strings.HasSuffix(req.Repo.Config, ".yml") {
-		// a nil response instructs the Drone server to
-		// use the configuration file as-is, without
-		// modification.
-		return nil, nil
+func includes(c condition, i string) bool {
+	for _, pattern := range c.Include {
+		if ok, _ := filepath.Match(pattern, i); ok {
+			fmt.Println("file ", i, " matches pattern ", pattern)
+			return true
+		}
 	}
+	return false
+}
 
+func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
 	// get the configuration file from the request.
 	config := req.Config.Data
 
 	resources, err := unmarshal([]byte(config))
 
 	if err != nil {
-		fmt.Println("failed")
 		return nil, nil
 	}
 
-	for _, r := range resources {
-		switch r.Kind {
+	changedFiles := [2]string{"file.txt", "directory/thing.txt"}
+
+	for _, resource := range resources {
+		switch resource.Kind {
 		case "pipeline":
-			if len(r.Trigger.Paths.Include) > 0 {
-				r.Trigger.Attrs["event"] = []string{"*"}
-				if len(r.Steps) > 0 {
-					for _, step := range r.Steps {
-						if step == nil {
-							continue
+			if len(resource.Trigger.Paths.Include) > 0 {
+				skipPipeline := true
+				for _, p := range changedFiles {
+					if includes(resource.Trigger.Paths, p) {
+						skipPipeline = false
+						break
+					}
+				}
+				if skipPipeline {
+					resource.Trigger.Attrs["event"] = map[string][]string{"exclude": []string{"*"}}
+				}
+			}
+
+			for _, step := range resource.Steps {
+				if step == nil {
+					continue
+				}
+
+				if len(step.When.Paths.Include) > 0 {
+					skipStep := true
+					for _, i := range changedFiles {
+						if includes(step.When.Paths, i) {
+							skipStep = false
+							break
 						}
-						if len(step.When.Paths.Include) > 0 {
-							step.Attrs["event"] = []string{"*"}
-						}
+					}
+					if skipStep {
+						step.Attrs["event"] = map[string][]string{"exclude": []string{"*"}}
 					}
 				}
 			}

@@ -3,6 +3,7 @@ module github.com/jimsheldon/drone-convert-changeset
 go 1.12
 
 require (
+	github.com/bmatcuk/doublestar v1.1.1
 	github.com/buildkite/yaml v2.1.0+incompatible
 	github.com/drone/drone-go v1.0.6
 	github.com/drone/drone-yaml v1.2.2
