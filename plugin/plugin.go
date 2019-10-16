@@ -5,16 +5,24 @@
 package plugin
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
 
-	bkyaml "github.com/buildkite/yaml"
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
-	"github.com/drone/drone-yaml/yaml"
+	droneyaml "github.com/drone/drone-yaml/yaml"
+	"github.com/drone/drone-yaml/yaml/pretty"
+
+	"github.com/buildkite/yaml"
 	//"github.com/google/go-github/github"
 	//"golang.org/x/oauth2"
+)
+
+const (
+	separator = "---"
+	newline   = "\n"
 )
 
 // New returns a new conversion plugin.
@@ -29,7 +37,7 @@ type plugin struct {
 }
 
 type conditions struct {
-	Changeset yaml.Condition `json:"changeset,omitempty"`
+	Changeset droneyaml.Condition `json:"changeset,omitempty"`
 }
 
 type container struct {
@@ -38,9 +46,11 @@ type container struct {
 }
 
 type pipeline struct {
-	Version string       `json:"version,omitempty"`
-	Kind    string       `json:"kind,omitempty"`
-	Type    string       `json:"type,omitempty"`
+	Version string `json:"version,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	Type    string `json:"type,omitempty"`
+	Name    string `json:"name,omitempty"`
+
 	Steps   []*container `json:"steps,omitempty"`
 	Trigger conditions   `json:"trigger,omitempty"`
 }
@@ -65,34 +75,48 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	// get the configuration file from the request.
 	config := req.Config.Data
 
-	manifest, err := yaml.ParseRawString(config)
+	manifest, err := droneyaml.ParseRawString(config)
 	if err != nil {
 		return nil, nil
 	}
 
+	cManifest := &droneyaml.Manifest{}
+
 	for _, n := range manifest {
-		var obj yaml.Resource
+		var dResource droneyaml.Resource
+		var cResource droneyaml.Resource
 		switch n.Kind {
 		case "pipeline":
-			obj = new(pipeline)
-			err := bkyaml.Unmarshal(n.Data, obj)
+			dResource = new(droneyaml.Pipeline)
+			cResource = new(pipeline)
+			err := yaml.Unmarshal(n.Data, dResource)
 			if err != nil {
 				return nil, nil
 			}
-			switch t := obj.(type) {
+			err = yaml.Unmarshal(n.Data, cResource)
+			if err != nil {
+				return nil, nil
+			}
+
+			switch t := cResource.(type) {
 			case *pipeline:
 				if len(t.Trigger.Changeset.Include) > 0 {
+					pipeline := &droneyaml.Pipeline{}
+					pipeline.Name = t.Name
+					pipeline.Kind = t.Kind
 					for _, include := range t.Trigger.Changeset.Include {
 						fmt.Println("include is", include)
 					}
-				}
-				if len(t.Steps) > 0 {
-					for _, step := range t.Steps {
-						if step == nil {
-							continue
+					if len(t.Steps) > 0 {
+						//steps := &droneyaml.Conditions{}
+						for _, step := range t.Steps {
+							if step == nil {
+								continue
+							}
+							fmt.Println("step is", step.Name)
 						}
-						fmt.Println("step is", step.Name)
 					}
+					cManifest.Resources = append(cManifest.Resources, pipeline)
 				}
 			}
 		}
@@ -113,7 +137,9 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	//log.Println(repos)
 
 	// returns the modified configuration file.
+	buf := new(bytes.Buffer)
+	pretty.Print(buf, cManifest)
 	return &drone.Config{
-		Data: config,
+		Data: buf.String(),
 	}, nil
 }
