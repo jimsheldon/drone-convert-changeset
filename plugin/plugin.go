@@ -36,31 +36,6 @@ type plugin struct {
 	token string
 }
 
-type conditions struct {
-	Changeset droneyaml.Condition `json:"changeset,omitempty"`
-}
-
-type container struct {
-	Name string     `json:"name,omitempty"`
-	When conditions `json:"when,omitempty"`
-}
-
-type pipeline struct {
-	Version string `json:"version,omitempty"`
-	Kind    string `json:"kind,omitempty"`
-	Type    string `json:"type,omitempty"`
-	Name    string `json:"name,omitempty"`
-
-	Steps   []*container `json:"steps,omitempty"`
-	Trigger conditions   `json:"trigger,omitempty"`
-}
-
-// GetVersion returns the resource version.
-func (p *pipeline) GetVersion() string { return p.Version }
-
-// GetKind returns the resource kind.
-func (p *pipeline) GetKind() string { return p.Kind }
-
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
 	// TODO this should be modified or removed. For
 	// demonstration purposes we show how you can ignore
@@ -80,35 +55,34 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 		return nil, nil
 	}
 
-	cManifest := &droneyaml.Manifest{}
+	newManifest := &droneyaml.Manifest{}
 
 	for _, n := range manifest {
-		var dResource droneyaml.Resource
-		var cResource droneyaml.Resource
+		var r droneyaml.Resource
 		switch n.Kind {
-		case "pipeline":
-			dResource = new(droneyaml.Pipeline)
-			cResource = new(pipeline)
-			err := yaml.Unmarshal(n.Data, dResource)
-			if err != nil {
-				return nil, nil
-			}
-			err = yaml.Unmarshal(n.Data, cResource)
+		case "cron":
+			r = new(droneyaml.Cron)
+		case "secret":
+			r = new(droneyaml.Secret)
+		case "signature":
+			r = new(droneyaml.Signature)
+		case "registry":
+			r = new(droneyaml.Registry)
+		default:
+			r = new(droneyaml.Pipeline)
+			err := yaml.Unmarshal(n.Data, r)
 			if err != nil {
 				return nil, nil
 			}
 
-			switch t := cResource.(type) {
-			case *pipeline:
-				if len(t.Trigger.Changeset.Include) > 0 {
-					pipeline := &droneyaml.Pipeline{}
-					pipeline.Name = t.Name
-					pipeline.Kind = t.Kind
-					for _, include := range t.Trigger.Changeset.Include {
+			switch t := r.(type) {
+			case *droneyaml.Pipeline:
+				if len(t.Trigger.Paths.Include) > 0 {
+					for _, include := range t.Trigger.Paths.Include {
 						fmt.Println("include is", include)
 					}
+					t.Trigger.Event.Exclude = []string{"*"}
 					if len(t.Steps) > 0 {
-						//steps := &droneyaml.Conditions{}
 						for _, step := range t.Steps {
 							if step == nil {
 								continue
@@ -116,10 +90,10 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 							fmt.Println("step is", step.Name)
 						}
 					}
-					cManifest.Resources = append(cManifest.Resources, pipeline)
 				}
 			}
 		}
+		newManifest.Resources = append(newManifest.Resources, r)
 	}
 
 	// TODO this should be modified or removed. For
@@ -138,7 +112,7 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 
 	// returns the modified configuration file.
 	buf := new(bytes.Buffer)
-	pretty.Print(buf, cManifest)
+	pretty.Print(buf, newManifest)
 	return &drone.Config{
 		Data: buf.String(),
 	}, nil
