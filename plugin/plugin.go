@@ -40,8 +40,7 @@ type (
 	}
 
 	step struct {
-		Name  string
-		When  conditions
+		When  conditions             `yaml:"when,omitempty"`
 		Attrs map[string]interface{} `yaml:",inline"`
 	}
 
@@ -100,23 +99,25 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	config := req.Config.Data
 
 	resources, err := unmarshal([]byte(config))
+
 	if err != nil {
 		fmt.Println("failed")
 		return nil, nil
 	}
+
 	for _, r := range resources {
 		switch r.Kind {
 		case "pipeline":
 			if len(r.Trigger.Paths.Include) > 0 {
-				for _, include := range r.Trigger.Paths.Include {
-					fmt.Println("include is", include)
-				}
+				r.Trigger.Attrs["event"] = []string{"*"}
 				if len(r.Steps) > 0 {
 					for _, step := range r.Steps {
 						if step == nil {
 							continue
 						}
-						fmt.Println("step name", step.Name)
+						if len(step.When.Paths.Include) > 0 {
+							step.Attrs["event"] = []string{"*"}
+						}
 					}
 				}
 			}
@@ -135,7 +136,9 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 	// returns the modified configuration file.
 	//buf := new(bytes.Buffer)
 	//pretty.Print(buf, newManifest)
+
+	newConfig, err := marshal(resources)
 	return &drone.Config{
-		Data: config,
+		Data: string(newConfig),
 	}, nil
 }
