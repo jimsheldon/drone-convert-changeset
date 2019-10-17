@@ -130,12 +130,22 @@ func getFilesChanged(r drone.Repo, b drone.Build, token string) ([]string, error
 	tc := oauth2.NewClient(newctx, ts)
 
 	client := github.NewClient(tc)
-	commitsComparrison, _, err := client.Repositories.CompareCommits(newctx, r.Namespace, r.Name, b.Before, b.After)
-	if err != nil {
-		return nil, err
+
+	var commitFiles []github.CommitFile
+	if b.Before == "" || b.Before == "0000000000000000000000000000000000000000" {
+		response, _, err := client.Repositories.GetCommit(newctx, r.Namespace, r.Name, b.After)
+		if err != nil {
+			return nil, err
+		}
+		commitFiles = response.Files
+	} else {
+		response, _, err := client.Repositories.CompareCommits(newctx, r.Namespace, r.Name, b.Before, b.After)
+		if err != nil {
+			return nil, err
+		}
+		commitFiles = response.Files
 	}
 
-	commitFiles := commitsComparrison.Files
 	var files []string
 	for _, f := range commitFiles {
 		files = append(files, *f.Filename)
