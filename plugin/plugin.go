@@ -14,9 +14,9 @@ import (
 	"github.com/drone/drone-go/plugin/converter"
 
 	filepath "github.com/bmatcuk/doublestar"
+	"github.com/google/go-github/github"
+	"golang.org/x/oauth2"
 	"gopkg.in/yaml.v2"
-	//"github.com/google/go-github/github"
-	//"golang.org/x/oauth2"
 )
 
 // New returns a new conversion plugin.
@@ -122,34 +122,41 @@ func (c *condition) excludes(v string) bool {
 	return false
 }
 
-/*
-func includes(c condition, i string) bool {
-	for _, pattern := range c.Include {
-		if ok, _ := filepath.Match(pattern, i); ok {
-			fmt.Println("file ", i, " matches pattern ", pattern)
-			return true
-		}
-	}
-	return false
-}
-*/
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
 	// get the configuration file from the request.
 	config := req.Config.Data
 
-	fmt.Println(req.Build.After)
-	resources, err := unmarshal([]byte(config))
+	newctx := context.Background()
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: p.token},
+	)
+	tc := oauth2.NewClient(newctx, ts)
 
+	client := github.NewClient(tc)
+	fmt.Println("sending to github", req.Repo.Namespace, req.Repo.Name, req.Build.Before, req.Build.After)
+	commitsComparrison, _, err := client.Repositories.CompareCommits(newctx, req.Repo.Namespace, req.Repo.Name, req.Build.Before, req.Build.After)
+	if err != nil {
+		return nil, nil
+	}
+	commitFiles := commitsComparrison.Files
+	var changedFiles []string
+	for _, f := range commitFiles {
+		changedFiles = append(changedFiles, *f.Filename)
+	}
+	fmt.Println("got", changedFiles)
+
+	resources, err := unmarshal([]byte(config))
 	if err != nil {
 		return nil, nil
 	}
 
-	changedFiles := [2]string{"file.txt", "directory/thing.txt"}
+	//changedFiles := [2]string{"file.txt", "directory/thing.txt"}
 
 	for _, resource := range resources {
 		switch resource.Kind {
 		case "pipeline":
-			if len(resource.Trigger.Paths.Include) > 0 {
+			// there must be a better way to check whether paths.include or paths.exclude is set
+			if len(append(resource.Trigger.Paths.Include, resource.Trigger.Paths.Exclude...)) > 0 {
 				skipPipeline := true
 				for _, p := range changedFiles {
 					got, want := resource.Trigger.Paths.match(p), true
@@ -168,8 +175,8 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 				if step == nil {
 					continue
 				}
-
-				if len(step.When.Paths.Include) > 0 {
+				// there must be a better way to check whether paths.include or paths.exclude is set
+				if len(append(step.When.Paths.Include, step.When.Paths.Exclude...)) > 0 {
 					skipStep := true
 					for _, i := range changedFiles {
 						got, want := step.When.Paths.match(i), true
@@ -187,20 +194,11 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 		}
 	}
 
-	//newctx := context.Background()
-	//ts := oauth2.StaticTokenSource(
-	//	&oauth2.Token{AccessToken: p.token},
-	//)
-	//tc := oauth2.NewClient(newctx, ts)
-	//client := github.NewClient(tc)
-	//repos, _, _ := client.Repositories.List(newctx, "", nil)
-	//log.Println(repos)
-
-	// returns the modified configuration file.
-	//buf := new(bytes.Buffer)
-	//pretty.Print(buf, newManifest)
-
 	newConfig, err := marshal(resources)
+	if err != nil {
+		return nil, nil
+	}
+
 	return &drone.Config{
 		Data: string(newConfig),
 	}, nil
