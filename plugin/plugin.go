@@ -45,11 +45,12 @@ type (
 	}
 
 	conditions struct {
-		Paths condition              `json:"yaml,omitempty"`
+		Paths condition              `yaml:"paths,omitempty"`
 		Attrs map[string]interface{} `yaml:",inline"`
 	}
 
 	condition struct {
+		Exclude []string `yaml:"exclude,omitempty"`
 		Include []string `yaml:"include,omitempty"`
 	}
 )
@@ -84,6 +85,44 @@ func marshal(in []*resource) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// Match returns true if the string matches the include
+// patterns and does not match any of the exclude patterns.
+func (c *condition) match(v string) bool {
+	if c.excludes(v) {
+		return false
+	}
+	if c.includes(v) {
+		return true
+	}
+	if len(c.Include) == 0 {
+		return true
+	}
+	return false
+}
+
+// Includes returns true if the string matches the include
+// patterns.
+func (c *condition) includes(v string) bool {
+	for _, pattern := range c.Include {
+		if ok, _ := filepath.Match(pattern, v); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// Excludes returns true if the string matches the exclude
+// patterns.
+func (c *condition) excludes(v string) bool {
+	for _, pattern := range c.Exclude {
+		if ok, _ := filepath.Match(pattern, v); ok {
+			return true
+		}
+	}
+	return false
+}
+
+/*
 func includes(c condition, i string) bool {
 	for _, pattern := range c.Include {
 		if ok, _ := filepath.Match(pattern, i); ok {
@@ -93,11 +132,12 @@ func includes(c condition, i string) bool {
 	}
 	return false
 }
-
+*/
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
 	// get the configuration file from the request.
 	config := req.Config.Data
 
+	fmt.Println(req.Build.After)
 	resources, err := unmarshal([]byte(config))
 
 	if err != nil {
@@ -112,7 +152,9 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 			if len(resource.Trigger.Paths.Include) > 0 {
 				skipPipeline := true
 				for _, p := range changedFiles {
-					if includes(resource.Trigger.Paths, p) {
+					got, want := resource.Trigger.Paths.match(p), true
+					if got == want {
+						fmt.Println("keeping pipeline", resource.Attrs["name"])
 						skipPipeline = false
 						break
 					}
@@ -130,7 +172,9 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 				if len(step.When.Paths.Include) > 0 {
 					skipStep := true
 					for _, i := range changedFiles {
-						if includes(step.When.Paths, i) {
+						got, want := step.When.Paths.match(i), true
+						if got == want {
+							fmt.Println("keeping step", step.Attrs["name"])
 							skipStep = false
 							break
 						}
