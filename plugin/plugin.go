@@ -122,41 +122,51 @@ func (c *condition) excludes(v string) bool {
 	return false
 }
 
-func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
-	// get the configuration file from the request.
-	config := req.Config.Data
-
+func getFilesChanged(r drone.Repo, b drone.Build, token string) ([]string, error) {
 	newctx := context.Background()
 	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: p.token},
+		&oauth2.Token{AccessToken: token},
 	)
 	tc := oauth2.NewClient(newctx, ts)
 
 	client := github.NewClient(tc)
-	fmt.Println("sending to github", req.Repo.Namespace, req.Repo.Name, req.Build.Before, req.Build.After)
-	commitsComparrison, _, err := client.Repositories.CompareCommits(newctx, req.Repo.Namespace, req.Repo.Name, req.Build.Before, req.Build.After)
+	commitsComparrison, _, err := client.Repositories.CompareCommits(newctx, r.Namespace, r.Name, b.Before, b.After)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
+
 	commitFiles := commitsComparrison.Files
-	var changedFiles []string
+	var files []string
 	for _, f := range commitFiles {
-		changedFiles = append(changedFiles, *f.Filename)
+		files = append(files, *f.Filename)
 	}
-	fmt.Println("got", changedFiles)
+	fmt.Println("github saw these files changed", files)
+	return files, nil
+}
+
+func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
+	// get the configuration file from the request.
+	config := req.Config.Data
 
 	resources, err := unmarshal([]byte(config))
 	if err != nil {
 		return nil, nil
 	}
 
-	//changedFiles := [2]string{"file.txt", "directory/thing.txt"}
-
+	checkedGithub := false
+	var changedFiles []string
 	for _, resource := range resources {
 		switch resource.Kind {
 		case "pipeline":
 			// there must be a better way to check whether paths.include or paths.exclude is set
 			if len(append(resource.Trigger.Paths.Include, resource.Trigger.Paths.Exclude...)) > 0 {
+				if !checkedGithub {
+					changedFiles, err = getFilesChanged(req.Repo, req.Build, p.token)
+					if err != nil {
+						return nil, nil
+					}
+					checkedGithub = true
+				}
 				skipPipeline := true
 				for _, p := range changedFiles {
 					got, want := resource.Trigger.Paths.match(p), true
@@ -177,6 +187,13 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 				}
 				// there must be a better way to check whether paths.include or paths.exclude is set
 				if len(append(step.When.Paths.Include, step.When.Paths.Exclude...)) > 0 {
+					if !checkedGithub {
+						changedFiles, err = getFilesChanged(req.Repo, req.Build, p.token)
+						if err != nil {
+							return nil, nil
+						}
+						checkedGithub = true
+					}
 					skipStep := true
 					for _, i := range changedFiles {
 						got, want := step.When.Paths.match(i), true
