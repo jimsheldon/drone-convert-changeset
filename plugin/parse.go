@@ -45,9 +45,9 @@ func (c *condition) excludes(v string) bool {
 	return false
 }
 
-func parsePipelines(d string, b drone.Build, r drone.Repo, token string) ([]*resource, error) {
+func parsePipelines(data string, build drone.Build, repo drone.Repo, token string) ([]*resource, error) {
 
-	resources, err := unmarshal([]byte(d))
+	resources, err := unmarshal([]byte(data))
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func parsePipelines(d string, b drone.Build, r drone.Repo, token string) ([]*res
 			// there must be a better way to check whether paths.include or paths.exclude is set
 			if len(append(resource.Trigger.Paths.Include, resource.Trigger.Paths.Exclude...)) > 0 {
 				if !checkedGithub {
-					changedFiles, err = getFilesChanged(r, b, token)
+					changedFiles, err = getFilesChanged(repo, build, token)
 					if err != nil {
 						return nil, err
 					}
@@ -87,7 +87,7 @@ func parsePipelines(d string, b drone.Build, r drone.Repo, token string) ([]*res
 				// there must be a better way to check whether paths.include or paths.exclude is set
 				if len(append(step.When.Paths.Include, step.When.Paths.Exclude...)) > 0 {
 					if !checkedGithub {
-						changedFiles, err = getFilesChanged(r, b, token)
+						changedFiles, err = getFilesChanged(repo, build, token)
 						if err != nil {
 							return nil, err
 						}

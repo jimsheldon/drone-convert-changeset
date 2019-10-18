@@ -10,7 +10,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func getFilesChanged(r drone.Repo, b drone.Build, token string) ([]string, error) {
+func getFilesChanged(repo drone.Repo, build drone.Build, token string) ([]string, error) {
 	newctx := context.Background()
 	ts := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
@@ -20,14 +20,14 @@ func getFilesChanged(r drone.Repo, b drone.Build, token string) ([]string, error
 	client := github.NewClient(tc)
 
 	var commitFiles []github.CommitFile
-	if b.Before == "" || b.Before == "0000000000000000000000000000000000000000" {
-		response, _, err := client.Repositories.GetCommit(newctx, r.Namespace, r.Name, b.After)
+	if build.Before == "" || build.Before == "0000000000000000000000000000000000000000" {
+		response, _, err := client.Repositories.GetCommit(newctx, repo.Namespace, repo.Name, build.After)
 		if err != nil {
 			return nil, err
 		}
 		commitFiles = response.Files
 	} else {
-		response, _, err := client.Repositories.CompareCommits(newctx, r.Namespace, r.Name, b.Before, b.After)
+		response, _, err := client.Repositories.CompareCommits(newctx, repo.Namespace, repo.Name, build.Before, build.After)
 		if err != nil {
 			return nil, err
 		}
@@ -38,6 +38,8 @@ func getFilesChanged(r drone.Repo, b drone.Build, token string) ([]string, error
 	for _, f := range commitFiles {
 		files = append(files, *f.Filename)
 	}
+
 	fmt.Println("github saw these files changed", files)
+
 	return files, nil
 }

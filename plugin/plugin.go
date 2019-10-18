@@ -7,6 +7,7 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/drone/drone-go/drone"
@@ -14,13 +15,6 @@ import (
 
 	"gopkg.in/yaml.v2"
 )
-
-// New returns a new conversion plugin.
-func New(token string) converter.Plugin {
-	return &plugin{
-		token: token,
-	}
-}
 
 type (
 	plugin struct {
@@ -81,7 +75,16 @@ func marshal(in []*resource) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// New returns a new conversion plugin.
+func New(token string) converter.Plugin {
+	return &plugin{
+		token: token,
+	}
+}
+
 func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Config, error) {
+
+	fmt.Println("initiated for repo", req.Repo.Name)
 
 	resources, err := parsePipelines(req.Config.Data, req.Build, req.Repo, p.token)
 	if err != nil {
