@@ -76,7 +76,7 @@ func parsePipelines(data string, build drone.Build, repo drone.Repo, token strin
 					}
 				}
 				if skipPipeline {
-					resource.Trigger.Attrs["event"] = map[string][]string{"exclude": []string{"*"}}
+					resource.Trigger.Event.Exclude = []string{"*"}
 				}
 			}
 
@@ -103,7 +103,7 @@ func parsePipelines(data string, build drone.Build, repo drone.Repo, token strin
 						}
 					}
 					if skipStep {
-						step.Attrs["event"] = map[string][]string{"exclude": []string{"*"}}
+						step.When.Event.Exclude = []string{"*"}
 					}
 				}
 			}

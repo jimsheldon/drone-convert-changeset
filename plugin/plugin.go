@@ -35,6 +35,7 @@ type (
 	}
 
 	conditions struct {
+		Event condition              `yaml:"event,omitempty"`
 		Paths condition              `yaml:"paths,omitempty"`
 		Attrs map[string]interface{} `yaml:",inline"`
 	}
