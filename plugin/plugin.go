@@ -13,7 +13,7 @@ import (
 	"github.com/drone/drone-go/drone"
 	"github.com/drone/drone-go/plugin/converter"
 
-	"gopkg.in/yaml.v2"
+	"github.com/buildkite/yaml"
 )
 
 type (
