@@ -87,17 +87,27 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 
 	fmt.Println("initiated for repo", req.Repo.Name)
 
-	resources, err := parsePipelines(req.Config.Data, req.Build, req.Repo, p.token)
+	data := req.Config.Data
+	resources, pathsSeen, err := parsePipelines(data, req.Build, req.Repo, p.token)
 	if err != nil {
 		return nil, nil
 	}
 
-	config, err := marshal(resources)
-	if err != nil {
-		return nil, nil
+	var config string
+	if pathsSeen {
+		fmt.Println("paths fields were seen, marshaling config")
+		c, err := marshal(resources)
+		if err != nil {
+			return nil, nil
+		}
+		config = string(c)
+	} else {
+		fmt.Println(("paths fields not seen, no marshaling necessary"))
+		config = data
 	}
 
 	return &drone.Config{
-		Data: string(config),
+		Data: config,
 	}, nil
+
 }
