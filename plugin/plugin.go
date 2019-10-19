@@ -102,7 +102,7 @@ func (p *plugin) Convert(ctx context.Context, req *converter.Request) (*drone.Co
 		}
 		config = string(c)
 	} else {
-		fmt.Println(("paths fields not seen, no marshaling necessary"))
+		fmt.Println("paths fields not seen, no marshaling necessary")
 		config = data
 	}
 
