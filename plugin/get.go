@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/drone/drone-go/drone"
 
@@ -38,8 +37,6 @@ func getFilesChanged(repo drone.Repo, build drone.Build, token string) ([]string
 	for _, f := range commitFiles {
 		files = append(files, *f.Filename)
 	}
-
-	fmt.Println("github saw these files changed", files)
 
 	return files, nil
 }

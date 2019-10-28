@@ -7,8 +7,8 @@ package main
 import (
 	"net/http"
 
-	"github.com/jimsheldon/drone-convert-changeset/plugin"
 	"github.com/drone/drone-go/plugin/converter"
+	"github.com/jimsheldon/drone-convert-changeset/plugin"
 
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/kelseyhightower/envconfig"
@@ -19,9 +19,10 @@ import (
 type spec struct {
 	Bind   string `envconfig:"DRONE_BIND"`
 	Debug  bool   `envconfig:"DRONE_DEBUG"`
+	Text   bool   `envconfig:"DRONE_LOGS_TEXT"`
 	Secret string `envconfig:"DRONE_SECRET"`
 
-	Token  string `envconfig:"GITHUB_TOKEN"`
+	Token string `envconfig:"GITHUB_TOKEN"`
 }
 
 func main() {
@@ -33,6 +34,11 @@ func main() {
 
 	if spec.Debug {
 		logrus.SetLevel(logrus.DebugLevel)
+	}
+	if spec.Text {
+		logrus.SetFormatter(&logrus.TextFormatter{})
+	} else {
+		logrus.SetFormatter(&logrus.JSONFormatter{})
 	}
 	if spec.Secret == "" {
 		logrus.Fatalln("missing secret key")

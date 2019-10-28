@@ -1,11 +1,10 @@
 package plugin
 
 import (
-	"fmt"
-
 	"github.com/drone/drone-go/drone"
 
 	filepath "github.com/bmatcuk/doublestar"
+	"github.com/sirupsen/logrus"
 )
 
 // match returns true if the string matches the include
@@ -72,12 +71,27 @@ func parsePipelines(data string, build drone.Build, repo drone.Repo, token strin
 				for _, p := range changedFiles {
 					got, want := resource.Trigger.Paths.match(p), true
 					if got == want {
-						fmt.Println("keeping pipeline", resource.Attrs["name"])
+						logrus.WithFields(logrus.Fields{
+							"action":    build.Action,
+							"after":     build.After,
+							"before":    build.Before,
+							"namespace": repo.Namespace,
+							"name":      repo.Name,
+						}).Infoln("including pipeline", resource.Attrs["name"])
+
 						skipPipeline = false
 						break
 					}
 				}
 				if skipPipeline {
+					logrus.WithFields(logrus.Fields{
+						"action":    build.Action,
+						"after":     build.After,
+						"before":    build.Before,
+						"namespace": repo.Namespace,
+						"name":      repo.Name,
+					}).Infoln("excluding pipeline", resource.Attrs["name"])
+
 					resource.Trigger.Event.Exclude = []string{"*"}
 				}
 			}
@@ -100,12 +114,27 @@ func parsePipelines(data string, build drone.Build, repo drone.Repo, token strin
 					for _, i := range changedFiles {
 						got, want := step.When.Paths.match(i), true
 						if got == want {
-							fmt.Println("keeping step", step.Attrs["name"])
+							logrus.WithFields(logrus.Fields{
+								"action":    build.Action,
+								"after":     build.After,
+								"before":    build.Before,
+								"namespace": repo.Namespace,
+								"name":      repo.Name,
+							}).Infoln("including step", step.Attrs["name"])
+
 							skipStep = false
 							break
 						}
 					}
 					if skipStep {
+						logrus.WithFields(logrus.Fields{
+							"action":    build.Action,
+							"after":     build.After,
+							"before":    build.Before,
+							"namespace": repo.Namespace,
+							"name":      repo.Name,
+						}).Infoln("excluding step", step.Attrs["name"])
+
 						step.When.Event.Exclude = []string{"*"}
 					}
 				}
